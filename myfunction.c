@@ -129,8 +129,8 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
             }
         }
         // filter out min and max
-        sum_pixels_by_weight(&sum, src[calcIndex(min_row, min_col, dim)], -1);
-        sum_pixels_by_weight(&sum, src[calcIndex(max_row, max_col, dim)], -1);
+        sum_pixels_by_weight(&sum, src[CALCINDEX(min_row, min_col, dim)], -1);
+        sum_pixels_by_weight(&sum, src[CALCINDEX(max_row, max_col, dim)], -1);
     }
 
     // assign kernel's result to pixel at [i,j]
@@ -145,10 +145,13 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
 */
 void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
-    int i, j;
-    for (i = kernelSize / 2 ; i < dim - kernelSize / 2; i++) {
-        for (j =  kernelSize / 2 ; j < dim - kernelSize / 2 ; j++) {
-            dst[calcIndex(i, j, dim)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
+    register int i, j, t;
+    i = j = DIVIDE(kernelSize, 2);
+    int limit = SUBTRACT(dim,i);
+    for (; i < limit; i++) {
+        t = MULT(i, dim);
+        for (; j < limit; j++) {
+            dst[ADD(t,j)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
         }
     }
 }
