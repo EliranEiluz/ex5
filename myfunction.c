@@ -3,7 +3,7 @@
 #define MIN(a,b) ((a) < (b) ? (a):(b))
 #define MULT(a,b) ((a) * (b))
 #define SUBTRACT(a,b) ((a) - (b))
-#define SUM(a,b) ((a) + (b))
+#define ADD(a,b) ((a) + (b))
 #define DIVIDE(a,b) ((a) / (b))
 #define CALCINDEX(a,b,c) (((a) * (c)) + (b))
 typedef struct {
@@ -58,11 +58,10 @@ static void assign_sum_to_pixel(pixel *current_pixel, pixel_sum sum, int kernelS
 * sum_pixels_by_weight - Sums pixel values, scaled by given weight
 */
 static void sum_pixels_by_weight(pixel_sum *sum, pixel p, int weight) {
-	sum->red += ((int) p.red) * weight;
-	sum->green += ((int) p.green) * weight;
-	sum->blue += ((int) p.blue) * weight;
+	sum->red = ADD(sum->red,MULT((int) p.red,weight));
+    sum->green = ADD(sum->green,MULT((int) p.green,weight));
+    sum->blue = ADD(sum->blue,MULT((int) p.blue,weight));
 	// sum->num++;
-	return;
 }
 
 /*
@@ -80,9 +79,10 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
 	pixel loop_pixel;
 
 	initialize_pixel_sum(&sum);
-
-	for(ii = max(i-1, 0); ii <= min(i+1, dim-1); ii++) {
-		for(jj = max(j-1, 0); jj <= min(j+1, dim-1); jj++) {
+    int checker = MIN(i+1, dim-1);
+    int checker1 = MIN(j+1, dim-1);
+	for(ii = MAX(i-1, 0); ii <= checker; ii++) {
+		for(jj = MAX(j-1, 0); jj <= checker1; jj++) {
 
 			int kRow, kCol;
 
@@ -105,23 +105,24 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
 			}
 
 			// apply kernel on pixel at [ii,jj]
-			sum_pixels_by_weight(&sum, src[calcIndex(ii, jj, dim)], kernel[kRow][kCol]);
+			sum_pixels_by_weight(&sum, src[CALCINDEX(ii, jj, dim)], kernel[kRow][kCol]);
 		}
 	}
 
 	if (filter) {
 		// find min and max coordinates
-		for(ii = max(i-1, 0); ii <= min(i+1, dim-1); ii++) {
-			for(jj = max(j-1, 0); jj <= min(j+1, dim-1); jj++) {
+		for(ii = MAX(i-1, 0); ii <= checker; ii++) {
+			for(jj = MAX(j-1, 0); jj <= checker1; jj++) {
 				// check if smaller than min or higher than max and update
-				loop_pixel = src[calcIndex(ii, jj, dim)];
-				if ((((int) loop_pixel.red) + ((int) loop_pixel.green) + ((int) loop_pixel.blue)) <= min_intensity) {
-					min_intensity = (((int) loop_pixel.red) + ((int) loop_pixel.green) + ((int) loop_pixel.blue));
+				loop_pixel = src[CALCINDEX(ii, jj, dim)];
+                int toCheck = ADD(ADD(((int) loop_pixel.red),((int) loop_pixel.green)),((int) loop_pixel.blue));
+				if (toCheck <= min_intensity) {
+					min_intensity = toCheck;
 					min_row = ii;
 					min_col = jj;
 				}
-				if ((((int) loop_pixel.red) + ((int) loop_pixel.green) + ((int) loop_pixel.blue)) > max_intensity) {
-					max_intensity = (((int) loop_pixel.red) + ((int) loop_pixel.green) + ((int) loop_pixel.blue));
+				if (toCheck > max_intensity) {
+					max_intensity = toCheck;
 					max_row = ii;
 					max_col = jj;
 				}
@@ -153,14 +154,17 @@ void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSi
 }
 
 void charsToPixels(Image *charsImg, pixel* pixels) {
-
-	int row, col;
+    register int sum1, sum2;
+	register int row, col;
 	for (row = 0 ; row < m ; row++) {
+        sum1 = MULT(row,n);
+        sum2 = MULT(sum1,3);
 		for (col = 0 ; col < n ; col++) {
-
-			pixels[row*n + col].red = image->data[3*row*n + 3*col];
-			pixels[row*n + col].green = image->data[3*row*n + 3*col + 1];
-			pixels[row*n + col].blue = image->data[3*row*n + 3*col + 2];
+            sum2 = ADD(MULT(3,col),sum2);
+            sum1 = ADD(sum1,col);
+			pixels[MULT(row,n) + col].red = image->data[3*row*n + 3*col];
+			pixels[MULT(row,n) + col].green = image->data[3*row*n + 3*col + 1];
+			pixels[MULT(row,n) + col].blue = image->data[3*row*n + 3*col + 2];
 		}
 	}
 }
