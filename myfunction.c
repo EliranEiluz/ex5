@@ -154,30 +154,33 @@ void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSi
 }
 
 void charsToPixels(Image *charsImg, pixel* pixels) {
-    register int sum1, sum2;
+    register int sum1, sum2, sum3, sum4;
     register int row, col;
     for (row = 0 ; row < m ; row++) {
         sum1 = MULT(row,n);
         sum2 = MULT(sum1,3);
         for (col = 0 ; col < n ; col++) {
-            sum2 = ADD(MULT(3,col),sum2);
-            sum1 = ADD(sum1,col);
-            pixels[MULT(row,n) + col].red = image->data[3*row*n + 3*col];
-            pixels[MULT(row,n) + col].green = image->data[3*row*n + 3*col + 1];
-            pixels[MULT(row,n) + col].blue = image->data[3*row*n + 3*col + 2];
+            sum4 = ADD(MULT(3,col),sum2);
+            sum3 = ADD(sum1,col);
+            pixels[sum3].red = image->data[sum4];
+            pixels[sum3].green = image->data[ADD(sum4, 1)];
+            pixels[sum3].blue = image->data[ADD(sum4, 2)];
         }
     }
 }
 
 void pixelsToChars(pixel* pixels, Image *charsImg) {
-
-    int row, col;
+    register int sum1, sum2, sum3, sum4;
+    register int row, col;
     for (row = 0 ; row < m ; row++) {
+        sum1 = MULT(row,n);
+        sum2 = MULT(sum1,3);
         for (col = 0 ; col < n ; col++) {
-
-            image->data[3*row*n + 3*col] = pixels[row*n + col].red;
-            image->data[3*row*n + 3*col + 1] = pixels[row*n + col].green;
-            image->data[3*row*n + 3*col + 2] = pixels[row*n + col].blue;
+            sum4 = ADD(MULT(3,col),sum2);
+            sum3 = ADD(sum1,col);
+            image->data[sum4] = pixels[sum3].red;
+            image->data[ADD(sum4,1)] = pixels[sum3].green;
+            image->data[ADD(sum4,2)] = pixels[sum3].blue;
         }
     }
 }
