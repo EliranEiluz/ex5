@@ -6,6 +6,7 @@
 #define ADD(a,b) ((a) + (b))
 #define DIVIDE(a,b) ((a) / (b))
 #define CALCINDEX(a,b,c) (((a) * (c)) + (b))
+
 typedef struct {
     unsigned char red;
     unsigned char green;
@@ -26,19 +27,19 @@ typedef struct {
 
 static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
-    int ii, jj,index;
+    register int ii, jj,index,index2;
     pixel_sum sum;
-    pixel current_pixel,pix, pix2;
+    pixel current_pixel,pix;
     int min_intensity = 766; // arbitrary value that is higher than maximum possible intensity, which is 255*3=765
     int max_intensity = -1; // arbitrary value that is lower than minimum possible intensity, which is 0
     int min_row, min_col, max_row, max_col;
     pixel loop_pixel;
     int kRow, kCol;
-    sum.red = sum.blue = sum.green = 0;
+    register int x, y, z;
+    x = y= z = 0;
     int checker = MIN(i+1, dim-1);
     int checker1 = MIN(j+1, dim-1);
     for(ii = MAX(i-1, 0); ii <= checker; ii++) {
-
         // compute row index in kernel
         if (ii < i) {
             kRow = 0;
@@ -62,26 +63,27 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
 
             pix = src[CALCINDEX(ii, jj, dim)];
             index = kernel[kRow][kCol];
-            sum.red = ADD(sum.red,MULT((int) pix.red,index));
-            sum.green = ADD(sum.green,MULT((int) pix.green,index));
-            sum.blue = ADD(sum.blue,MULT((int) pix.blue,index));
+            x = ADD(x,MULT((int) pix.red,index));
+            y = ADD(y,MULT((int) pix.green,index));
+            z = ADD(z,MULT((int) pix.blue,index));
         }
     }
 
     if (filter) {
-        // find min and max coordinates
+        int toCheck;
         for(ii = MAX(i-1, 0); ii <= checker; ii++) {
+            index2 = MULT(ii,dim);
             for(jj = MAX(j-1, 0); jj <= checker1; jj++) {
                 // check if smaller than min or higher than max and update
-                loop_pixel = src[CALCINDEX(ii, jj, dim)];
-                int toCheck = ADD(ADD(((int) loop_pixel.red),((int) loop_pixel.green)),((int) loop_pixel.blue));
+                loop_pixel = src[ADD(index2,jj)];
+                toCheck = ADD(ADD(((int) loop_pixel.red),((int) loop_pixel.green)),((int) loop_pixel.blue));
                 if (toCheck <= min_intensity) {
                     min_intensity = toCheck;
                     min_row = ii;
                     min_col = jj;
                 }
                 if (toCheck > max_intensity) {
-                    max_intensity = toCheck;
+                    max_intensity = (toCheck);
                     max_row = ii;
                     max_col = jj;
                 }
@@ -89,20 +91,20 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
         }
         // filter out min and max
         pix = src[CALCINDEX(min_row, min_col, dim)];
-        sum.red = ADD(sum.red,MULT((int) pix.red,-1));
-        sum.green = ADD(sum.green,MULT((int) pix.green,-1));
-        sum.blue = ADD(sum.blue,MULT((int) pix.blue,-1));
+        x = ADD(x,MULT((int) pix.red,-1));
+        y = ADD(y,MULT((int) pix.green,-1));
+        z = ADD(z,MULT((int) pix.blue,-1));
         pix = src[CALCINDEX(max_row, max_col, dim)];
-        sum.red = ADD(sum.red,MULT((int) pix.red,-1));
-        sum.green = ADD(sum.green,MULT((int) pix.green,-1));
-        sum.blue = ADD(sum.blue,MULT((int) pix.blue,-1));
+        x = ADD(x,MULT((int) pix.red,-1));
+        y = ADD(y,MULT((int) pix.green,-1));
+        z = ADD(z,MULT((int) pix.blue,-1));
     }
-    sum.red = DIVIDE(sum.red, kernelScale);
-    sum.green = DIVIDE(sum.green, kernelScale);
-    sum.blue = DIVIDE(sum.blue, kernelScale);
-    current_pixel.red = (unsigned char) (MIN(MAX(sum.red, 0), 255));
-    current_pixel.green = (unsigned char) (MIN(MAX(sum.green, 0), 255));
-    current_pixel.blue = (unsigned char) (MIN(MAX(sum.blue, 0), 255));
+    x = DIVIDE(x, kernelScale);
+    y = DIVIDE(y, kernelScale);
+    z = DIVIDE(z, kernelScale);
+    current_pixel.red = (unsigned char) (MIN(MAX(x, 0), 255));
+    current_pixel.green = (unsigned char) (MIN(MAX(y, 0), 255));
+    current_pixel.blue = (unsigned char) (MIN(MAX(z, 0), 255));
     // assign kernel's result to pixel at [i,j]
     //assign_sum_to_pixel(&current_pixel, sum, kernelScale);
     return current_pixel;
@@ -118,11 +120,10 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
 void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
     register int i, j, t ,w;
-    t = DIVIDE(kernelSize, 2);
-    int limit = SUBTRACT(dim,t);
-    for (i = t ; i < limit; i++) {
+    int limit = SUBTRACT(dim,1);
+    for (i = 1 ; i < limit; i++) {
         w = MULT(i, dim);
-        for (j = t ; j < limit; j++) {
+        for (j = 1 ; j < limit; j++) {
             //dst[calcIndex(i, j, dim)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
             dst[ADD(w,j)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
             //dst[ADD(w,j+1)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
@@ -132,9 +133,9 @@ void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSi
 
 
 void doConvolution(Image *image, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
-
-    pixel* pixelsImg = malloc(m*n*sizeof(pixel));
-    pixel* backupOrg = malloc(m*n*sizeof(pixel));
+    int c = MULT(MULT(m,n),sizeof(pixel));
+    pixel* pixelsImg = malloc(c);
+    pixel* backupOrg = malloc(c);
 
     register int sum1, sum2, sum3, sum4;
     register int row, col;
