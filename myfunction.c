@@ -20,80 +20,36 @@ typedef struct {
 } pixel_sum;
 
 
-/* Compute min and max of two integers, respectively */
-int min(int a, int b) { return (a < b ? a : b); }
-int max(int a, int b) { return (a > b ? a : b); }
-
-int calcIndex(int i, int j, int n) {
-    return ((i)*(n)+(j));
-}
-
-/*
- * initialize_pixel_sum - Initializes all fields of sum to 0
- */
-void initialize_pixel_sum(pixel_sum *sum) {
-    sum->red = sum->green = sum->blue = 0;
-    // sum->num = 0;
-    return;
-}
-
-/*
- * assign_sum_to_pixel - Truncates pixel's new value to match the range [0,255]
- */
-static void assign_sum_to_pixel(pixel *current_pixel, pixel_sum sum, int kernelScale) {
-
-    // divide by kernel's weight
-    sum.red = sum.red / kernelScale;
-    sum.green = sum.green / kernelScale;
-    sum.blue = sum.blue / kernelScale;
-
-    // truncate each pixel's color values to match the range [0,255]
-    current_pixel->red = (unsigned char) (MIN(MAX(sum.red, 0), 255));
-    current_pixel->green = (unsigned char) (MIN(MAX(sum.green, 0), 255));
-    current_pixel->blue = (unsigned char) (MIN(MAX(sum.blue, 0), 255));
-    return;
-}
-
-/*
-* sum_pixels_by_weight - Sums pixel values, scaled by given weight
-*/
-static void sum_pixels_by_weight(pixel_sum *sum, pixel p, int weight) {
-    sum->red = ADD(sum->red,MULT((int) p.red,weight));
-    sum->green = ADD(sum->green,MULT((int) p.green,weight));
-    sum->blue = ADD(sum->blue,MULT((int) p.blue,weight));
-    // sum->num++;
-}
-
 /*
  *  Applies kernel for pixel at (i,j)
  */
+
 static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
-    int ii, jj;
-    int currRow, currCol;
+    int ii, jj,index;
     pixel_sum sum;
-    pixel current_pixel;
+    pixel current_pixel,pix, pix2;
     int min_intensity = 766; // arbitrary value that is higher than maximum possible intensity, which is 255*3=765
     int max_intensity = -1; // arbitrary value that is lower than minimum possible intensity, which is 0
     int min_row, min_col, max_row, max_col;
     pixel loop_pixel;
-
-    initialize_pixel_sum(&sum);
+    int kRow, kCol;
+    sum.red = sum.blue = sum.green = 0;
     int checker = MIN(i+1, dim-1);
     int checker1 = MIN(j+1, dim-1);
     for(ii = MAX(i-1, 0); ii <= checker; ii++) {
+
+        // compute row index in kernel
+        if (ii < i) {
+            kRow = 0;
+        } else if (ii > i) {
+            kRow = 2;
+        } else {
+            kRow = 1;
+        }
+
         for(jj = MAX(j-1, 0); jj <= checker1; jj++) {
 
-            int kRow, kCol;
-
-            // compute row index in kernel
-            if (ii < i) {
-                kRow = 0;
-            } else if (ii > i) {
-                kRow = 2;
-            } else {
-                kRow = 1;
-            }
 
             // compute column index in kernel
             if (jj < j) {
@@ -104,8 +60,11 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
                 kCol = 1;
             }
 
-            // apply kernel on pixel at [ii,jj]
-            sum_pixels_by_weight(&sum, src[CALCINDEX(ii, jj, dim)], kernel[kRow][kCol]);
+            pix = src[CALCINDEX(ii, jj, dim)];
+            index = kernel[kRow][kCol];
+            sum.red = ADD(sum.red,MULT((int) pix.red,index));
+            sum.green = ADD(sum.green,MULT((int) pix.green,index));
+            sum.blue = ADD(sum.blue,MULT((int) pix.blue,index));
         }
     }
 
@@ -129,89 +88,81 @@ static pixel applyKernel(int dim, int i, int j, pixel *src, int kernelSize, int 
             }
         }
         // filter out min and max
-        sum_pixels_by_weight(&sum, src[CALCINDEX(min_row, min_col, dim)], -1);
-        sum_pixels_by_weight(&sum, src[CALCINDEX(max_row, max_col, dim)], -1);
+        pix = src[CALCINDEX(min_row, min_col, dim)];
+        sum.red = ADD(sum.red,MULT((int) pix.red,-1));
+        sum.green = ADD(sum.green,MULT((int) pix.green,-1));
+        sum.blue = ADD(sum.blue,MULT((int) pix.blue,-1));
+        pix = src[CALCINDEX(max_row, max_col, dim)];
+        sum.red = ADD(sum.red,MULT((int) pix.red,-1));
+        sum.green = ADD(sum.green,MULT((int) pix.green,-1));
+        sum.blue = ADD(sum.blue,MULT((int) pix.blue,-1));
     }
-
+    sum.red = DIVIDE(sum.red, kernelScale);
+    sum.green = DIVIDE(sum.green, kernelScale);
+    sum.blue = DIVIDE(sum.blue, kernelScale);
+    current_pixel.red = (unsigned char) (MIN(MAX(sum.red, 0), 255));
+    current_pixel.green = (unsigned char) (MIN(MAX(sum.green, 0), 255));
+    current_pixel.blue = (unsigned char) (MIN(MAX(sum.blue, 0), 255));
     // assign kernel's result to pixel at [i,j]
-    assign_sum_to_pixel(&current_pixel, sum, kernelScale);
+    //assign_sum_to_pixel(&current_pixel, sum, kernelScale);
     return current_pixel;
 }
+
 
 /*
 * Apply the kernel over each pixel.
 * Ignore pixels where the kernel exceeds bounds. These are pixels with row index smaller than kernelSize/2 and/or
 * column index smaller than kernelSize/2
 */
+
 void smooth(int dim, pixel *src, pixel *dst, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
-    register int i, j, t;
-    i = j = DIVIDE(kernelSize, 2);
-    int limit = SUBTRACT(dim,i);
-    for (; i < limit; i++) {
-        t = MULT(i, dim);
-        for (; j < limit; j++) {
-            dst[ADD(t,j)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
+    register int i, j, t ,w;
+    t = DIVIDE(kernelSize, 2);
+    int limit = SUBTRACT(dim,t);
+    for (i = t ; i < limit; i++) {
+        w = MULT(i, dim);
+        for (j = t ; j < limit; j++) {
+            //dst[calcIndex(i, j, dim)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
+            dst[ADD(w,j)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
+            //dst[ADD(w,j+1)] = applyKernel(dim, i, j, src, kernelSize, kernel, kernelScale, filter);
         }
     }
 }
 
-void charsToPixels(Image *charsImg, pixel* pixels) {
-    register int sum1, sum2, sum3, sum4;
-    register int row, col;
-    for (row = 0 ; row < m ; row++) {
-        sum1 = MULT(row,n);
-        sum2 = MULT(sum1,3);
-        for (col = 0 ; col < n ; col++) {
-            sum4 = ADD(MULT(3,col),sum2);
-            sum3 = ADD(sum1,col);
-            pixels[sum3].red = image->data[sum4];
-            pixels[sum3].green = image->data[ADD(sum4, 1)];
-            pixels[sum3].blue = image->data[ADD(sum4, 2)];
-        }
-    }
-}
-
-void pixelsToChars(pixel* pixels, Image *charsImg) {
-    register int sum1, sum2, sum3, sum4;
-    register int row, col;
-    for (row = 0 ; row < m ; row++) {
-        sum1 = MULT(row,n);
-        sum2 = MULT(sum1,3);
-        for (col = 0 ; col < n ; col++) {
-            sum4 = ADD(MULT(3,col),sum2);
-            sum3 = ADD(sum1,col);
-            image->data[sum4] = pixels[sum3].red;
-            image->data[ADD(sum4,1)] = pixels[sum3].green;
-            image->data[ADD(sum4,2)] = pixels[sum3].blue;
-        }
-    }
-}
-
-void copyPixels(pixel* src, pixel* dst) {
-
-    int row, col;
-    for (row = 0 ; row < m ; row++) {
-        for (col = 0 ; col < n ; col++) {
-
-            dst[row*n + col].red = src[row*n + col].red;
-            dst[row*n + col].green = src[row*n + col].green;
-            dst[row*n + col].blue = src[row*n + col].blue;
-        }
-    }
-}
 
 void doConvolution(Image *image, int kernelSize, int kernel[kernelSize][kernelSize], int kernelScale, bool filter) {
 
     pixel* pixelsImg = malloc(m*n*sizeof(pixel));
     pixel* backupOrg = malloc(m*n*sizeof(pixel));
 
-    charsToPixels(image, pixelsImg);
-    copyPixels(pixelsImg, backupOrg);
+    register int sum1, sum2, sum3, sum4;
+    register int row, col;
+    for (row = 0 ; row < m ; row++) {
+        sum1 = MULT(row,n);
+        sum2 = MULT(sum1,3);
+        for (col = 0 ; col < n ; col++) {
+            sum4 = ADD(MULT(3,col),sum2);
+            sum3 = ADD(sum1,col);
+            backupOrg[sum3].red = pixelsImg[sum3].red = image->data[sum4];
+            backupOrg[sum3].green = pixelsImg[sum3].green = image->data[ADD(sum4, 1)];
+            backupOrg[sum3].blue = pixelsImg[sum3].blue = image->data[ADD(sum4, 2)];
+        }
+    }
 
     smooth(m, backupOrg, pixelsImg, kernelSize, kernel, kernelScale, filter);
 
-    pixelsToChars(pixelsImg, image);
+    for (row = 0 ; row < m ; row++) {
+        sum1 = MULT(row,n);
+        sum2 = MULT(sum1,3);
+        for (col = 0 ; col < n ; col++) {
+            sum4 = ADD(MULT(3,col),sum2);
+            sum3 = ADD(sum1,col);
+            image->data[sum4] = pixelsImg[sum3].red;
+            image->data[ADD(sum4,1)] = pixelsImg[sum3].green;
+            image->data[ADD(sum4,2)] = pixelsImg[sum3].blue;
+        }
+    }
 
     free(pixelsImg);
     free(backupOrg);
